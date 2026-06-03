@@ -1,0 +1,58 @@
+name: 월간 실거래가 지도 갱신
+
+# 매월 1일에 직전 2개월치 실거래가를 다시 수집해 docs/index.html 을 갱신한다.
+# (실거래는 신고 지연이 있어 직전 달뿐 아니라 그 전 달도 함께 다시 받는다.)
+on:
+  schedule:
+    - cron: "0 18 1 * *"   # 매월 1일 18:00 UTC = KST 익일 03:00
+  workflow_dispatch: {}     # 수동 실행 버튼
+
+permissions:
+  contents: write           # docs/index.html 커밋·푸시용
+
+concurrency:
+  group: update-map
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 직전 2개월 계산
+        run: |
+          M1=$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y%m)
+          M2=$(date -u -d "$(date -u +%Y-%m-01) -2 month" +%Y%m)
+          echo "MONTHS=$M2 $M1" >> "$GITHUB_ENV"
+          echo "수집 대상 월: $M2 $M1"
+
+      - name: 수집 + 지도 생성
+        env:
+          APT_TRADE_ENDPOINT: ${{ secrets.APT_TRADE_ENDPOINT }}
+          APT_TRADE_API_KEY: ${{ secrets.APT_TRADE_API_KEY }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          MAP_OUT: docs/index.html
+          # MONTHS 는 위 단계에서 주입됨. TARGETS 는 collect.py 기본값(강남·서초·송파) 사용.
+        run: |
+          python collect.py
+          python build_map.py
+
+      - name: 변경분 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- docs/index.html; then
+            echo "변경 없음 — 커밋 생략"
+          else
+            git add docs/index.html
+            git commit -m "chore: 월간 실거래가 지도 갱신 (${MONTHS})"
+            git push
+          fi
