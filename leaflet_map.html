@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>아파트 실거래가 지도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+<style>
+  :root{
+    --ink:#16243b; --ink-soft:#52607a; --line:#e4e0d6;
+    --paper:#f7f4ec; --glass:rgba(247,244,236,.86);
+    --accent:#b8503a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink)}
+  #map{position:absolute;inset:0;background:var(--paper)}
+
+  .panel{
+    position:absolute;top:18px;left:18px;z-index:1000;width:288px;
+    background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 18px 40px -18px rgba(22,36,59,.45);
+    padding:18px 18px 16px;
+    animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .kicker{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  .title{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:3px 0 2px}
+  .sub{font-size:12px;color:var(--ink-soft);margin-bottom:14px}
+
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:14px;background:#fff}
+  .seg button{flex:1;border:0;background:transparent;padding:9px 0;font:inherit;font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:.18s}
+  .seg button.on{background:var(--ink);color:#f7f4ec}
+
+  .row{margin-bottom:13px}
+  .row label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:6px}
+  select{width:100%;font:inherit;font-size:13px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+  .rangeval{font-size:12px;color:var(--ink);font-weight:700}
+
+  .summary{border-top:1px dashed var(--line);margin-top:14px;padding-top:13px;display:flex;gap:14px}
+  .stat .n{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .stat .l{font-size:10.5px;color:var(--ink-soft);margin-top:3px}
+
+  .legend{
+    position:absolute;left:18px;bottom:18px;z-index:1000;
+    background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:11px;padding:11px 13px;
+    box-shadow:0 12px 30px -16px rgba(22,36,59,.4);
+  }
+  .legend .lt{font-size:10.5px;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;margin-bottom:7px}
+  .legend .scale{display:flex;align-items:center;gap:0}
+  .legend .sw{width:30px;height:11px}
+  .legend .ends{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-soft);margin-top:4px}
+
+  .pin{border-radius:50%;border:1.6px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .lf-pop h4{margin:0 0 6px;font-size:15px;font-weight:800;letter-spacing:-.01em}
+  .lf-pop .big{font-size:18px;font-weight:800;color:var(--accent);margin:0 0 7px}
+  .lf-pop table{border-collapse:collapse;font-size:12px}
+  .lf-pop td{padding:2px 0}
+  .lf-pop td:first-child{color:var(--ink-soft);padding-right:14px}
+  .leaflet-popup-content-wrapper{border-radius:11px}
+  .tip{font-size:11.5px;font-weight:700;background:var(--ink);color:#f7f4ec;border:0;padding:3px 7px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  .tip::before{display:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel">
+  <div class="kicker">REAL-TRADE MAP</div>
+  <div class="title" id="title">아파트 실거래가</div>
+  <div class="sub">국토교통부 매매 실거래 · 좌표는 지번 중심</div>
+
+  <div class="seg" id="seg">
+    <button data-mode="ppy" class="on">평당가</button>
+    <button data-mode="amt">총액</button>
+  </div>
+
+  <div class="row">
+    <label>자치구</label>
+    <select id="gu"></select>
+  </div>
+
+  <div class="row">
+    <label>거래월</label>
+    <select id="ym"></select>
+  </div>
+
+  <div class="row">
+    <label>가격 하한 <span class="rangeval" id="minlbl"></span></label>
+    <input type="range" id="minp" min="0" value="0" />
+  </div>
+
+  <div class="summary">
+    <div class="stat"><div class="n" id="cnt">0</div><div class="l">표시 거래</div></div>
+    <div class="stat"><div class="n" id="med">-</div><div class="l" id="medl">중앙 평당가(만원)</div></div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="lt" id="legt">평당가 (만원)</div>
+  <div class="scale" id="legscale"></div>
+  <div class="ends"><span id="leglo"></span><span id="leghi"></span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script>
+/* ==== DATA START (build_leaflet_map.py 가 이 구간을 교체) ==== */
+const DATA = [
+{"apt":"역삼래미안","gu":"강남구","ym":"2026-03","dong":"역삼동","amt":210000,"py":25.4,"ppy":8268,"ar":84.0,"fl":"12","by":"2005","date":"2026-03-11","lat":37.4995,"lng":127.0365},
+{"apt":"개포자이","gu":"강남구","ym":"2026-03","dong":"개포동","amt":265000,"py":31.2,"ppy":8494,"ar":103.1,"fl":"8","by":"2019","date":"2026-03-22","lat":37.4781,"lng":127.0668},
+{"apt":"청담현대","gu":"강남구","ym":"2026-04","dong":"청담동","amt":355000,"py":33.1,"ppy":10725,"ar":109.5,"fl":"10","by":"1999","date":"2026-04-03","lat":37.5219,"lng":127.0539},
+{"apt":"대치팰리스","gu":"강남구","ym":"2026-04","dong":"대치동","amt":300000,"py":28.9,"ppy":10380,"ar":95.4,"fl":"15","by":"2015","date":"2026-04-18","lat":37.4942,"lng":127.0628},
+{"apt":"잠실엘스","gu":"송파구","ym":"2026-03","dong":"잠실동","amt":245000,"py":25.7,"ppy":9533,"ar":84.8,"fl":"20","by":"2008","date":"2026-03-09","lat":37.5132,"lng":127.0855},
+{"apt":"파크리오","gu":"송파구","ym":"2026-03","dong":"신천동","amt":230000,"py":25.7,"ppy":8949,"ar":84.9,"fl":"7","by":"2008","date":"2026-03-27","lat":37.5169,"lng":127.0975},
+{"apt":"헬리오시티","gu":"송파구","ym":"2026-04","dong":"가락동","amt":238000,"py":25.7,"ppy":9261,"ar":84.9,"fl":"22","by":"2018","date":"2026-04-14","lat":37.4990,"lng":127.1186},
+{"apt":"올림픽선수촌","gu":"송파구","ym":"2026-04","dong":"방이동","amt":215000,"py":25.4,"ppy":8465,"ar":83.9,"fl":"5","by":"1988","date":"2026-04-25","lat":37.5181,"lng":127.1281}
+];
+const GUS = ["강남구","송파구"];
+const YMS = ["2026-03","2026-04"];
+/* ==== DATA END ==== */
+
+const PALETTE = ["#3b6ea5","#6fa8c7","#f2c14e","#e8833a","#cf4d3a"];
+const fmtMan = v => v>=10000 ? (v/10000).toFixed(v%10000?1:0)+"억" : v.toLocaleString()+"만";
+let MODE = "ppy";           // 'ppy' | 'amt'
+const val = d => MODE==="ppy" ? d.ppy : d.amt;
+
+// 모드별 분위 임계값(전체 데이터 기준 고정 색상 스케일)
+function quantiles(mode){
+  const xs = DATA.map(d=> mode==="ppy"?d.ppy:d.amt).sort((a,b)=>a-b);
+  const q = p => xs[Math.floor((xs.length-1)*p)];
+  return [q(.2),q(.4),q(.6),q(.8)];
+}
+const THRESH = {ppy:quantiles("ppy"), amt:quantiles("amt")};
+function colorOf(d){
+  const t=THRESH[MODE], v=val(d);
+  let i=0; while(i<t.length && v>t[i]) i++;
+  return PALETTE[i];
+}
+
+const map = L.map("map",{zoomControl:true}).setView([37.50,127.05],12);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  maxZoom:19,
+  attribution:'&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+const cluster = L.markerClusterGroup({maxClusterRadius:48, spiderfyOnMaxZoom:true, chunkedLoading:true});
+map.addLayer(cluster);
+
+function popupHtml(d){
+  return `<div class="lf-pop">
+    <h4>${d.apt}</h4>
+    <div class="big">${MODE==="ppy"? d.ppy.toLocaleString()+"만/평" : fmtMan(d.amt)+"원"}</div>
+    <table>
+      <tr><td>평당가</td><td>${d.ppy.toLocaleString()} 만원</td></tr>
+      <tr><td>총액</td><td>${d.amt.toLocaleString()} 만원</td></tr>
+      <tr><td>전용</td><td>${d.ar}㎡ · ${d.py}평</td></tr>
+      <tr><td>층 / 준공</td><td>${d.fl}층 · ${d.by}년</td></tr>
+      <tr><td>위치</td><td>${d.gu} ${d.dong}</td></tr>
+      <tr><td>거래일</td><td>${d.date}</td></tr>
+    </table>
+  </div>`;
+}
+
+function render(){
+  const gu = document.getElementById("gu").value;
+  const ym = document.getElementById("ym").value;
+  const minp = +document.getElementById("minp").value;
+  cluster.clearLayers();
+  const shown=[]; const markers=[];
+  for(const d of DATA){
+    if(gu!=="all" && d.gu!==gu) continue;
+    if(ym!=="all" && d.ym!==ym) continue;
+    if(val(d) < minp) continue;
+    shown.push(d);
+    const m = L.circleMarker([d.lat,d.lng],{
+      radius:7, weight:1.6, color:"#fff", fillColor:colorOf(d), fillOpacity:.92, className:"pin"
+    });
+    m.bindTooltip(`${d.apt} · ${MODE==="ppy"? d.ppy.toLocaleString()+"만/평" : fmtMan(d.amt)}`,{direction:"top",className:"tip",offset:[0,-6]});
+    m.bindPopup(popupHtml(d),{maxWidth:260});
+    markers.push(m);
+  }
+  cluster.addLayers(markers);
+
+  document.getElementById("cnt").textContent = shown.length.toLocaleString();
+  const vals = shown.map(val).sort((a,b)=>a-b);
+  const med = vals.length ? vals[Math.floor(vals.length/2)] : null;
+  document.getElementById("med").textContent = med==null? "-"
+      : (MODE==="ppy" ? med.toLocaleString() : fmtMan(med));
+  document.getElementById("medl").textContent = MODE==="ppy"? "중앙 평당가(만원)" : "중앙 총액";
+}
+
+function syncSlider(){
+  const arr = DATA.map(val);
+  const mx = Math.max(...arr);
+  const step = MODE==="ppy"? 100 : 5000;
+  const s = document.getElementById("minp");
+  s.max = Math.ceil(mx/step)*step; s.step = step; s.value = 0;
+  updateMinLbl();
+}
+function updateMinLbl(){
+  const v=+document.getElementById("minp").value;
+  document.getElementById("minlbl").textContent =
+    v===0 ? "전체" : "≥ " + (MODE==="ppy"? v.toLocaleString()+"만/평" : fmtMan(v));
+}
+function drawLegend(){
+  document.getElementById("legt").textContent = MODE==="ppy"? "평당가 (만원)" : "총액";
+  document.getElementById("legscale").innerHTML =
+    PALETTE.map(c=>`<span class="sw" style="background:${c}"></span>`).join("");
+  const lo = Math.min(...DATA.map(val));
+  const hi = Math.max(...DATA.map(val));
+  document.getElementById("leglo").textContent = MODE==="ppy"? lo.toLocaleString() : fmtMan(lo);
+  document.getElementById("leghi").textContent = MODE==="ppy"? hi.toLocaleString() : fmtMan(hi);
+}
+
+// 제목 + 컨트롤 채우기
+document.getElementById("title").textContent =
+  (GUS.length===1 ? GUS[0] : GUS.length+"개 구") + " 아파트 실거래가";
+
+const guSel=document.getElementById("gu");
+guSel.innerHTML = `<option value="all">전체</option>` + GUS.map(g=>`<option value="${g}">${g}</option>`).join("");
+guSel.onchange = render;
+
+const ymSel=document.getElementById("ym");
+ymSel.innerHTML = `<option value="all">전체</option>` + YMS.map(y=>`<option value="${y}">${y}</option>`).join("");
+ymSel.onchange = render;
+
+document.getElementById("seg").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  MODE=b.dataset.mode;
+  [...document.querySelectorAll("#seg button")].forEach(x=>x.classList.toggle("on",x===b));
+  syncSlider(); drawLegend(); render();
+});
+document.getElementById("minp").addEventListener("input",()=>{updateMinLbl();render();});
+
+// 초기화
+syncSlider(); drawLegend(); render();
+const pts=DATA.map(d=>[d.lat,d.lng]);
+if(pts.length) map.fitBounds(pts,{padding:[60,60]});
+</script>
+</body>
+</html>
