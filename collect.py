@@ -6,6 +6,7 @@
     SECRETS_PATH=/path/to/secrets.env python collect.py
 
 수집 대상은 아래 TARGETS / MONTHS 만 바꾸면 된다.
+환경변수 TARGETS / MONTHS(공백·쉼표 구분)로 덮어쓸 수 있다(월간 자동 갱신용).
 구 코드는 lawd_codes.py 참고 (없는 코드는 거기 추가).
 """
 import os
@@ -15,9 +16,16 @@ import statistics
 import pipeline as pl
 from lawd_codes import region_name
 
+
+def _envlist(name, default):
+    """환경변수(공백/쉼표 구분)가 있으면 리스트로, 없으면 기본값."""
+    raw = os.environ.get(name)
+    return raw.replace(",", " ").split() if raw else default
+
+
 # ===== 수집 설정 =====
-TARGETS = ["11680", "11650", "11710"]   # 강남 · 서초 · 송파
-MONTHS = ["202512", "202601"]           # YYYYMM
+TARGETS = _envlist("TARGETS", ["11680", "11650", "11710"])  # 강남 · 서초 · 송파
+MONTHS = _envlist("MONTHS", ["202512", "202601"])           # YYYYMM
 OUT_DIR = "out"
 PY = 3.3058  # 1평 = 3.3058㎡
 
