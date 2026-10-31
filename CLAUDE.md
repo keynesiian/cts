@@ -5,7 +5,7 @@
 
 ## 파일 역할
 - `pipeline.py` : 핵심. 실거래가 조회(fetch_trades) + 카카오 지오코딩(geocode, 캐시) + 주소조립(address_for) + 좌표결합(enrich) + 내보내기(export)
-- `collect.py` : 여러 구·여러 달 수집 → `out/trades.{json,csv,geojson}` 저장. 상단 TARGETS/MONTHS만 수정
+- `collect.py` : 여러 구·여러 달 수집 → `out/trades.{json,csv,geojson}` 저장. 상단 TARGETS/MONTHS만 수정. 좌표까지 붙인 결과는 추적되는 `data/trades.json`에 월 누적(수집한 구·월만 교체, 나머지 월 유지)
 - `lawd_codes.py` : 시군구코드(LAWD_CD 5자리) → "시도 시군구" 매핑. 없는 지역은 dict에 추가
 - `build_map.py` : 지도 생성 진입점(Leaflet 전용)
 - `build_leaflet_map.py` / `leaflet_map.html` : 템플릿 DATA/GUS/YMS 치환 → 산출 HTML
