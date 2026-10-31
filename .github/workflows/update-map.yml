@@ -1,6 +1,7 @@
 name: 월간 실거래가 지도 갱신
 
-# 매월 1일에 직전 2개월치 실거래가를 다시 수집해 docs/index.html 을 갱신한다.
+# 매월 1일에 직전 2개월치 실거래가를 다시 수집해 data/trades.json 에 누적하고 docs/index.html 을 갱신한다.
+# 수집한 (구, 월)만 새 값으로 교체하고 이전 달은 그대로 유지한다.
 # (실거래는 신고 지연이 있어 직전 달뿐 아니라 그 전 달도 함께 다시 받는다.)
 on:
   schedule:
@@ -49,10 +50,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- docs/index.html; then
+          if git diff --quiet -- docs/index.html data/trades.json; then
             echo "변경 없음 — 커밋 생략"
           else
-            git add docs/index.html
+            git add docs/index.html data/trades.json
             git commit -m "chore: 월간 실거래가 지도 갱신 (${MONTHS})"
             git push
           fi
