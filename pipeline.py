@@ -98,6 +98,7 @@ def fetch_trades(lawd_cd, deal_ymd, num_rows=1000, tries=5):
                 "floor": g("floor"),
                 "build_year": g("buildYear"),
                 "date": f"{g('dealYear')}-{int(g('dealMonth')):02d}-{int(g('dealDay')):02d}",
+                "cancelled": g("cdealType") == "O",  # 해제여부. 해제 신고된 거래는 "O"
             })
         total = int(root.findtext(".//totalCount") or 0)
         if page * num_rows >= total:
