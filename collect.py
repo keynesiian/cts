@@ -10,6 +10,7 @@
 
 누적 저장: 좌표까지 붙인 결과를 data/trades.json(추적 대상)에 쌓는다.
 이번에 수집한 (구, 월)은 새 값으로 교체하고, 수집하지 않은 월은 그대로 둔다.
+해제(취소) 신고된 거래(cdealType="O")는 수집 시점에 빼고 저장한다. 그 뒤에 해제된 거래는 그 달을 다시 수집할 때 빠진다.
 지도(out/trades.json)에는 누적 전체가 들어간다.
 구 코드는 lawd_codes.py 참고 (없는 코드는 거기 추가).
 """
@@ -51,19 +52,22 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     all_trades = []
     collected = set()  # 건수가 있는 (구, 월)만 교체 대상. 0건은 수집 실패로 보고 기존값을 지키지 않는다
+    cancelled = 0
     for lawd in TARGETS:
         gu = (region_name(lawd) or lawd).split()[-1]
         for ym in MONTHS:
-            t = pl.fetch_trades(lawd, ym)
+            raw = pl.fetch_trades(lawd, ym)
+            t = [x for x in raw if not x.pop("cancelled", False)]  # 해제(취소) 거래 제외
             for x in t:
                 x["gu"] = gu
                 x["ym"] = f"{ym[:4]}-{ym[4:]}"
             all_trades += t
-            if t:
+            cancelled += len(raw) - len(t)
+            if raw:
                 collected.add((gu, f"{ym[:4]}-{ym[4:]}"))
-            print(f"{gu} {ym}: {len(t)}건", flush=True)
+            print(f"{gu} {ym}: {len(t)}건 (해제 {len(raw) - len(t)}건 제외)", flush=True)
 
-    print(f"총 {len(all_trades)}건 · 지오코딩 시작...", flush=True)
+    print(f"총 {len(all_trades)}건 (해제 {cancelled}건 제외) · 지오코딩 시작...", flush=True)
     pl.enrich(all_trades)
 
     clean = []
