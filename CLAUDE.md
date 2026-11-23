@@ -1,14 +1,15 @@
 # 아파트 실거래가 지도
 
 국토교통부 아파트 매매 실거래가 수집 → 카카오 지오코딩으로 좌표 결합 → 인터랙티브 HTML 지도 생성 파이프라인.
-지도 엔진은 **Leaflet+OSM** 하나만 사용한다(키·도메인 등록·웹서버 불필요).
+지도 엔진 기본은 **Leaflet+OSM**(키, 도메인 등록, 웹서버 불필요). `MAP_ENGINE=kakao`를 주면 카카오맵으로 만든다(JavaScript 키와 SDK 도메인 등록 필요).
 
 ## 파일 역할
 - `pipeline.py` : 핵심. 실거래가 조회(fetch_trades) + 카카오 지오코딩(geocode, 캐시) + 주소조립(address_for) + 좌표결합(enrich) + 내보내기(export)
 - `collect.py` : 여러 구·여러 달 수집 → `out/trades.{json,csv,geojson}` 저장. 상단 TARGETS/MONTHS만 수정. 좌표까지 붙인 결과는 추적되는 `data/trades.json`에 월 누적(수집한 구·월만 교체, 나머지 월 유지)
 - `lawd_codes.py` : 시군구코드(LAWD_CD 5자리) → "시도 시군구" 매핑. 없는 지역은 dict에 추가
-- `build_map.py` : 지도 생성 진입점(Leaflet 전용)
+- `build_map.py` : 지도 생성 진입점(기본 Leaflet, `MAP_ENGINE=kakao`면 카카오맵)
 - `build_leaflet_map.py` / `leaflet_map.html` : 템플릿 DATA/GUS/YMS 치환 → 산출 HTML
+- `build_kakao_map.py` / `kakao_map.html` : 카카오맵 판. DATA/GUS/YMS/DEFAULT_YM과 JavaScript 키를 채운다. `MAP_IN`(입력, 기본 out/trades.json), `MAP_YM`(처음 고를 달, 기본 마지막 달)
 - `report_stats.py` : `data/trades.json` → 월간 리포트용 구별 통계 `out/report/stats.json`. 숫자는 전부 여기서 계산(기본 달은 데이터 마지막 달의 전달, 마지막 달은 신고 중인 잠정치)
 - `build_report.py` : 통계 + 해설(`data/report/YYYY-MM.json`) → 리포트 HTML. `--strict`는 해설에 통계에 없는 금액, 비율, 건수나 금지 문장부호가 있으면 실패
 - `.claude/workflows/monthly-report.js` : 월간 리포트 워크플로(`/monthly-report`). 통계 계산 1 + 구별 초안 3 + 구별 반박 검증 3 + 발행 1, 에이전트 8개
@@ -40,10 +41,18 @@ REPORT_OUT=docs/report.html python build_report.py --strict   # 해설은 두고
 - 해설 규칙: 숫자는 stats의 `*_fmt` 문자열 그대로, 데이터에 없는 원인 추측 금지, 잠정 달은 비교 근거로 쓰지 않음
 - 일괄 거래: 한 단지에서 같은 날 10건 이상 신고된 거래(`BULK_MIN`)는 `bulk`로 분리하고 제외 수치 `ex_bulk`를 함께 계산. 청년주택 같은 소형 일괄 거래 하나가 구 합계와 중위값을 뒤집을 수 있음(2026년 9월 송파해링턴타워 170건)
 
+## 카카오맵 판
+```
+MAP_ENGINE=kakao MAP_IN=data/trades.json MAP_YM=2025-11 MAP_OUT=docs/kakao.html python build_map.py
+```
+- 카카오 디벨로퍼스에서 JavaScript 키가 속한 앱의 카카오맵 사용 설정을 켜고, JavaScript 키의 SDK 도메인에 `https://keynesiian.github.io`를 등록해야 GitHub Pages에서 지도가 뜬다. 미등록이면 SDK가 401(`domain mismatched`)을 돌려주고 페이지에 안내문이 뜬다
+- JavaScript 키는 산출 HTML 소스에 그대로 들어간다(카카오 JS 키는 공개 전제, 도메인 등록으로 막음). REST 키는 절대 넣지 않는다
+- file://로 열면 지도가 뜨지 않는다. Leaflet 판과 달리 등록된 도메인에서 열어야 한다
+
 ## 실행 (Claude Code 웹/클라우드 세션)
 클라우드 샌드박스는 연결된 GitHub repo로 돌며 `secrets.env`/`out/`은 gitignore라 부재한다. 다음 전제로 동작한다.
 
-- **키**: 파일이 아니라 세션 환경변수(secret)로 주입 — `APT_TRADE_ENDPOINT`, `APT_TRADE_API_KEY`, `KAKAO_REST_API_KEY`(지오코딩용, 필수). `load_env`가 파일 없으면 env에서 읽는다.
+- **키**: 파일이 아니라 세션 환경변수(secret)로 주입 — `APT_TRADE_ENDPOINT`, `APT_TRADE_API_KEY`, `KAKAO_REST_API_KEY`(지오코딩용, 필수), `KAKAO_JS_API_KEY`(카카오맵용, 선택). `load_env`가 파일 없으면 env에서 읽는다.
 - **출력 수신**: `MAP_OUT=docs/index.html` 환경변수를 주면 최종 HTML이 추적되는 `docs/`로 떨어진다 → 커밋/PR에 포함, GitHub Pages로 폰에서 열람.
 - **네트워크 허용 도메인**: `apis.data.go.kr`, `data.go.kr`, `dapi.kakao.com`, `github.com`
 - 차단 시 응답 헤더 `x-deny-reason`으로 막힌 도메인 확인 후 허용 목록에 추가.

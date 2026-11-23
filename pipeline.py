@@ -35,7 +35,7 @@ def load_env(path=None):
                 k, v = line.split("=", 1)
                 out[k.strip()] = v.strip()
     # 클라우드/웹 세션: 파일이 없거나 일부 키만 있을 때 환경변수(secret)로 보강·덮어쓰기
-    for k in ("APT_TRADE_ENDPOINT", "APT_TRADE_API_KEY", "KAKAO_REST_API_KEY"):
+    for k in ("APT_TRADE_ENDPOINT", "APT_TRADE_API_KEY", "KAKAO_REST_API_KEY", "KAKAO_JS_API_KEY"):
         if os.environ.get(k):
             out[k] = os.environ[k]
     return out

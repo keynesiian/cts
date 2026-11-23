@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>아파트 실거래가 지도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<style>
+  :root{
+    --ink:#16243b; --ink-soft:#52607a; --line:#e4e0d6;
+    --paper:#f7f4ec; --glass:rgba(247,244,236,.86);
+    --accent:#b8503a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink)}
+  #map{position:absolute;inset:0;background:var(--paper)}
+
+  .panel{
+    position:absolute;top:18px;left:18px;z-index:1000;width:288px;
+    background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 18px 40px -18px rgba(22,36,59,.45);
+    padding:18px 18px 16px;
+    animation:rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .kicker{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  .title{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:3px 0 2px}
+  .sub{font-size:12px;color:var(--ink-soft);margin-bottom:14px}
+
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:14px;background:#fff}
+  .seg button{flex:1;border:0;background:transparent;padding:9px 0;font:inherit;font-size:13px;font-weight:600;color:var(--ink-soft);cursor:pointer;transition:.18s}
+  .seg button.on{background:var(--ink);color:#f7f4ec}
+
+  .row{margin-bottom:13px}
+  .row label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:6px}
+  select{width:100%;font:inherit;font-size:13px;padding:8px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+  .rangeval{font-size:12px;color:var(--ink);font-weight:700}
+
+  .summary{border-top:1px dashed var(--line);margin-top:14px;padding-top:13px;display:flex;gap:14px}
+  .stat .n{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .stat .l{font-size:10.5px;color:var(--ink-soft);margin-top:3px}
+
+  .legend{
+    position:absolute;left:18px;bottom:18px;z-index:1000;
+    background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:11px;padding:11px 13px;
+    box-shadow:0 12px 30px -16px rgba(22,36,59,.4);
+  }
+  .legend .lt{font-size:10.5px;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;margin-bottom:7px}
+  .legend .scale{display:flex;align-items:center;gap:0}
+  .legend .sw{width:30px;height:11px}
+  .legend .ends{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-soft);margin-top:4px}
+
+  /* 카카오 CustomOverlay 로 그리는 말풍선과 툴팁 */
+  .kpop{
+    position:relative;width:260px;background:#fff;border-radius:11px;padding:13px 15px 12px;
+    box-shadow:0 10px 28px -10px rgba(22,36,59,.5);font-family:inherit;
+  }
+  .kpop::after{
+    content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;
+    border:7px solid transparent;border-bottom:0;border-top-color:#fff;
+  }
+  .kpop .x{position:absolute;top:6px;right:9px;border:0;background:none;font-size:18px;line-height:1;color:var(--ink-soft);cursor:pointer;padding:2px}
+  .kpop h4{margin:0 22px 6px 0;font-size:15px;font-weight:800;letter-spacing:-.01em}
+  .kpop .big{font-size:18px;font-weight:800;color:var(--accent);margin:0 0 7px}
+  .kpop table{border-collapse:collapse;font-size:12px}
+  .kpop td{padding:2px 0}
+  .kpop td:first-child{color:var(--ink-soft);padding-right:14px}
+  .kpop .more{border-top:1px dashed var(--line);margin-top:9px;padding-top:8px}
+  .kpop .more .mt{font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
+  .kpop .more ul{list-style:none;margin:0;padding:0;max-height:132px;overflow:auto;font-size:11.5px}
+  .kpop .more li{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+  .kpop .more li b{font-weight:700}
+  .tip{font-size:11.5px;font-weight:700;background:var(--ink);color:#f7f4ec;padding:3px 7px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.25);white-space:nowrap}
+
+  .sdkerr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px}
+  .sdkerr div{max-width:420px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;font-size:13px;line-height:1.6;color:var(--ink)}
+  .sdkerr b{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel">
+  <div class="kicker">REAL-TRADE MAP</div>
+  <div class="title" id="title">아파트 실거래가</div>
+  <div class="sub">국토교통부 매매 실거래 · 좌표는 지번 중심</div>
+
+  <div class="seg" id="seg">
+    <button data-mode="ppy" class="on">평당가</button>
+    <button data-mode="amt">총액</button>
+  </div>
+
+  <div class="row">
+    <label>자치구</label>
+    <select id="gu"></select>
+  </div>
+
+  <div class="row">
+    <label>거래월</label>
+    <select id="ym"></select>
+  </div>
+
+  <div class="row">
+    <label>가격 하한 <span class="rangeval" id="minlbl"></span></label>
+    <input type="range" id="minp" min="0" value="0" />
+  </div>
+
+  <div class="summary">
+    <div class="stat"><div class="n" id="cnt">0</div><div class="l">표시 거래</div></div>
+    <div class="stat"><div class="n" id="med">-</div><div class="l" id="medl">중앙 평당가(만원)</div></div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="lt" id="legt">평당가 (만원)</div>
+  <div class="scale" id="legscale"></div>
+  <div class="ends"><span id="leglo"></span><span id="leghi"></span></div>
+</div>
+
+<!-- 카카오 JavaScript 키는 build_kakao_map.py 가 채운다. 키의 SDK 도메인에 이 페이지 주소가 등록돼 있어야 지도가 뜬다 -->
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=__KAKAO_JS_API_KEY__&libraries=clusterer&autoload=false"></script>
+<script>
+/* ==== DATA START (build_kakao_map.py 가 이 구간을 교체) ==== */
+const DATA = [
+{"apt":"역삼래미안","gu":"강남구","ym":"2026-03","dong":"역삼동","amt":210000,"py":25.4,"ppy":8268,"ar":84.0,"fl":"12","by":"2005","date":"2026-03-11","lat":37.4995,"lng":127.0365},
+{"apt":"개포자이","gu":"강남구","ym":"2026-03","dong":"개포동","amt":265000,"py":31.2,"ppy":8494,"ar":103.1,"fl":"8","by":"2019","date":"2026-03-22","lat":37.4781,"lng":127.0668},
+{"apt":"청담현대","gu":"강남구","ym":"2026-04","dong":"청담동","amt":355000,"py":33.1,"ppy":10725,"ar":109.5,"fl":"10","by":"1999","date":"2026-04-03","lat":37.5219,"lng":127.0539},
+{"apt":"대치팰리스","gu":"강남구","ym":"2026-04","dong":"대치동","amt":300000,"py":28.9,"ppy":10380,"ar":95.4,"fl":"15","by":"2015","date":"2026-04-18","lat":37.4942,"lng":127.0628},
+{"apt":"잠실엘스","gu":"송파구","ym":"2026-03","dong":"잠실동","amt":245000,"py":25.7,"ppy":9533,"ar":84.8,"fl":"20","by":"2008","date":"2026-03-09","lat":37.5132,"lng":127.0855},
+{"apt":"파크리오","gu":"송파구","ym":"2026-03","dong":"신천동","amt":230000,"py":25.7,"ppy":8949,"ar":84.9,"fl":"7","by":"2008","date":"2026-03-27","lat":37.5169,"lng":127.0975},
+{"apt":"헬리오시티","gu":"송파구","ym":"2026-04","dong":"가락동","amt":238000,"py":25.7,"ppy":9261,"ar":84.9,"fl":"22","by":"2018","date":"2026-04-14","lat":37.4990,"lng":127.1186},
+{"apt":"올림픽선수촌","gu":"송파구","ym":"2026-04","dong":"방이동","amt":215000,"py":25.4,"ppy":8465,"ar":83.9,"fl":"5","by":"1988","date":"2026-04-25","lat":37.5181,"lng":127.1281}
+];
+const GUS = ["강남구","송파구"];
+const YMS = ["2026-03","2026-04"];
+const DEFAULT_YM = "all";
+/* ==== DATA END ==== */
+
+const PALETTE = ["#3b6ea5","#6fa8c7","#f2c14e","#e8833a","#cf4d3a"];
+const fmtMan = v => v>=10000 ? (v/10000).toFixed(v%10000?1:0)+"억" : v.toLocaleString()+"만";
+let MODE = "ppy";           // 'ppy' | 'amt'
+const val = d => MODE==="ppy" ? d.ppy : d.amt;
+const valTxt = d => MODE==="ppy" ? d.ppy.toLocaleString()+"만/평" : fmtMan(d.amt);
+
+// 모드별 분위 임계값(전체 데이터 기준 고정 색상 스케일)
+function quantiles(mode){
+  const xs = DATA.map(d=> mode==="ppy"?d.ppy:d.amt).sort((a,b)=>a-b);
+  const q = p => xs[Math.floor((xs.length-1)*p)];
+  return [q(.2),q(.4),q(.6),q(.8)];
+}
+const THRESH = {ppy:quantiles("ppy"), amt:quantiles("amt")};
+function colorOf(d){
+  const t=THRESH[MODE], v=val(d);
+  let i=0; while(i<t.length && v>t[i]) i++;
+  return PALETTE[i];
+}
+
+function sdkFail(){
+  // 지도가 없으면 패널과 범례는 쓸 데가 없고 안내문을 가리므로 숨긴다
+  document.querySelectorAll(".panel,.legend").forEach(el=>el.style.display="none");
+  const why = location.protocol==="file:"
+    ? `파일로 직접 연 페이지에서는 카카오 지도가 뜨지 않습니다. SDK 도메인에 등록한 주소(예: GitHub Pages)에서 여세요.`
+    : `카카오 디벨로퍼스에서 이 앱의 카카오맵 사용 설정이 켜져 있는지, JavaScript 키의 SDK 도메인에
+       <b>${location.origin}</b> 이 등록돼 있는지 확인하세요.`;
+  document.getElementById("map").innerHTML =
+    `<div class="sdkerr"><div><b>카카오 지도를 불러오지 못했습니다.</b><br>${why}</div></div>`;
+}
+
+function init(){
+  const map = new kakao.maps.Map(document.getElementById("map"),{
+    center:new kakao.maps.LatLng(37.50,127.05), level:6
+  });
+  map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
+
+  const bubble = (w,fs) => ({width:w+"px",height:w+"px",lineHeight:w+"px",fontSize:fs+"px",
+    background:"rgba(22,36,59,.82)",color:"#f7f4ec",textAlign:"center",fontWeight:"800",
+    borderRadius:"50%",border:"2px solid rgba(255,255,255,.9)",boxShadow:"0 2px 8px rgba(0,0,0,.25)"});
+  const cluster = new kakao.maps.MarkerClusterer({
+    map, averageCenter:true, minLevel:4, gridSize:48,
+    calculator:[10,50,100], styles:[bubble(32,12),bubble(38,12),bubble(46,13),bubble(54,14)]
+  });
+
+  // 색상별 원형 마커 이미지(SVG) 캐시
+  const IMG = {};
+  function markerImage(c){
+    if(!IMG[c]){
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><defs><filter id="s" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity=".3"/></filter></defs><circle cx="9" cy="9" r="6.6" fill="${c}" fill-opacity=".92" stroke="#fff" stroke-width="1.6" filter="url(#s)"/></svg>`;
+      IMG[c] = new kakao.maps.MarkerImage(
+        "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg),
+        new kakao.maps.Size(18,18), {offset:new kakao.maps.Point(9,9)});
+    }
+    return IMG[c];
+  }
+
+  const tip = new kakao.maps.CustomOverlay({yAnchor:1.9, zIndex:4});
+  const pop = new kakao.maps.CustomOverlay({yAnchor:1, zIndex:5, clickable:true});
+  kakao.maps.event.addListener(map,"click",()=>pop.setMap(null));
+
+  // 같은 지번에 거래가 겹치면 말풍선 아래에 그 지번의 다른 거래를 함께 보여준다
+  function popupEl(d, same){
+    const el = document.createElement("div");
+    el.className = "kpop";
+    const others = same.filter(x=>x!==d).sort((a,b)=>b.date.localeCompare(a.date));
+    el.innerHTML = `<button class="x" aria-label="닫기">×</button>
+      <h4>${d.apt}</h4>
+      <div class="big">${MODE==="ppy"? d.ppy.toLocaleString()+"만/평" : fmtMan(d.amt)+"원"}</div>
+      <table>
+        <tr><td>평당가</td><td>${d.ppy.toLocaleString()} 만원</td></tr>
+        <tr><td>총액</td><td>${d.amt.toLocaleString()} 만원</td></tr>
+        <tr><td>전용</td><td>${d.ar}㎡ · ${d.py}평</td></tr>
+        <tr><td>층 / 준공</td><td>${d.fl}층 · ${d.by}년</td></tr>
+        <tr><td>위치</td><td>${d.gu} ${d.dong}</td></tr>
+        <tr><td>거래일</td><td>${d.date}</td></tr>
+      </table>` + (others.length ? `
+      <div class="more"><div class="mt">같은 지번 거래 ${others.length}건 더</div><ul>${
+        others.map(o=>`<li><span>${o.date.slice(5)} ${o.py}평 ${o.fl}층</span><b>${valTxt(o)}</b></li>`).join("")
+      }</ul></div>` : "");
+    el.querySelector(".x").onclick = ()=>pop.setMap(null);
+    // 말풍선 안을 누르거나 스크롤해도 지도가 움직이거나 닫히지 않게 막는다
+    ["mousedown","touchstart","wheel","click"].forEach(ev=>el.addEventListener(ev,e=>e.stopPropagation()));
+    return el;
+  }
+
+  function render(){
+    const gu = document.getElementById("gu").value;
+    const ym = document.getElementById("ym").value;
+    const minp = +document.getElementById("minp").value;
+    pop.setMap(null); tip.setMap(null);
+    cluster.clear();
+    const shown=[]; const byPt=new Map();
+    for(const d of DATA){
+      if(gu!=="all" && d.gu!==gu) continue;
+      if(ym!=="all" && d.ym!==ym) continue;
+      if(val(d) < minp) continue;
+      shown.push(d);
+      const k=d.lat+","+d.lng;
+      if(!byPt.has(k)) byPt.set(k,[]);
+      byPt.get(k).push(d);
+    }
+    const markers = shown.map(d=>{
+      const pos = new kakao.maps.LatLng(d.lat,d.lng);
+      const m = new kakao.maps.Marker({position:pos, image:markerImage(colorOf(d))});
+      kakao.maps.event.addListener(m,"mouseover",()=>{
+        tip.setContent(`<div class="tip">${d.apt} · ${valTxt(d)}</div>`);
+        tip.setPosition(pos); tip.setMap(map);
+      });
+      kakao.maps.event.addListener(m,"mouseout",()=>tip.setMap(null));
+      kakao.maps.event.addListener(m,"click",()=>{
+        tip.setMap(null);
+        pop.setContent(popupEl(d, byPt.get(d.lat+","+d.lng)));
+        pop.setPosition(pos); pop.setMap(map);
+      });
+      return m;
+    });
+    cluster.addMarkers(markers);
+
+    document.getElementById("cnt").textContent = shown.length.toLocaleString();
+    const vals = shown.map(val).sort((a,b)=>a-b);
+    const med = vals.length ? vals[Math.floor(vals.length/2)] : null;
+    document.getElementById("med").textContent = med==null? "-"
+        : (MODE==="ppy" ? med.toLocaleString() : fmtMan(med));
+    document.getElementById("medl").textContent = MODE==="ppy"? "중앙 평당가(만원)" : "중앙 총액";
+  }
+
+  function syncSlider(){
+    const arr = DATA.map(val);
+    const mx = Math.max(...arr);
+    const step = MODE==="ppy"? 100 : 5000;
+    const s = document.getElementById("minp");
+    s.max = Math.ceil(mx/step)*step; s.step = step; s.value = 0;
+    updateMinLbl();
+  }
+  function updateMinLbl(){
+    const v=+document.getElementById("minp").value;
+    document.getElementById("minlbl").textContent =
+      v===0 ? "전체" : "≥ " + (MODE==="ppy"? v.toLocaleString()+"만/평" : fmtMan(v));
+  }
+  function drawLegend(){
+    document.getElementById("legt").textContent = MODE==="ppy"? "평당가 (만원)" : "총액";
+    document.getElementById("legscale").innerHTML =
+      PALETTE.map(c=>`<span class="sw" style="background:${c}"></span>`).join("");
+    const lo = Math.min(...DATA.map(val));
+    const hi = Math.max(...DATA.map(val));
+    document.getElementById("leglo").textContent = MODE==="ppy"? lo.toLocaleString() : fmtMan(lo);
+    document.getElementById("leghi").textContent = MODE==="ppy"? hi.toLocaleString() : fmtMan(hi);
+  }
+
+  // 제목 + 컨트롤 채우기
+  document.getElementById("title").textContent =
+    (GUS.length===1 ? GUS[0] : GUS.length+"개 구") + " 아파트 실거래가";
+
+  const guSel=document.getElementById("gu");
+  guSel.innerHTML = `<option value="all">전체</option>` + GUS.map(g=>`<option value="${g}">${g}</option>`).join("");
+  guSel.onchange = render;
+
+  const ymSel=document.getElementById("ym");
+  ymSel.innerHTML = `<option value="all">전체</option>` + YMS.map(y=>`<option value="${y}">${y}</option>`).join("");
+  ymSel.value = YMS.includes(DEFAULT_YM) ? DEFAULT_YM : "all";
+  ymSel.onchange = render;
+
+  document.getElementById("seg").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    MODE=b.dataset.mode;
+    [...document.querySelectorAll("#seg button")].forEach(x=>x.classList.toggle("on",x===b));
+    syncSlider(); drawLegend(); render();
+  });
+  document.getElementById("minp").addEventListener("input",()=>{updateMinLbl();render();});
+
+  // 초기화
+  syncSlider(); drawLegend(); render();
+  if(DATA.length){
+    const b = new kakao.maps.LatLngBounds();
+    DATA.forEach(d=>b.extend(new kakao.maps.LatLng(d.lat,d.lng)));
+    map.setBounds(b, 60, 60, 60, 60);
+  }
+}
+
+if(window.kakao && kakao.maps && kakao.maps.load) kakao.maps.load(init);
+else sdkFail();
+</script>
+</body>
+</html>
