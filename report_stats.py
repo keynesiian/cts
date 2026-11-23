@@ -21,6 +21,7 @@ OUT_PATH = "out/report/stats.json"
 BANDS = [("소형", "60㎡ 이하", 0, 60), ("중소형", "60~85㎡", 60, 85), ("중대형", "85㎡ 초과", 85, float("inf"))]
 TOP_N = 5
 RECORD_N = 10
+BULK_MIN = 10   # 한 단지에서 같은 날 이만큼 이상 신고되면 일괄 거래로 따로 본다(평소 붐비는 날은 7건 안팎)
 
 
 # ---------- 표기 ----------
@@ -73,6 +74,46 @@ def month_block(ts, ym):
     }
 
 
+def change_block(mb, pb):
+    return {
+        "count_pct": pct(mb["count"], pb["count"]),
+        "count_pct_fmt": fpct(pct(mb["count"], pb["count"])),
+        "median_ppy_pct": pct(mb["median_ppy"], pb["median_ppy"]),
+        "median_ppy_pct_fmt": fpct(pct(mb["median_ppy"], pb["median_ppy"])),
+    }
+
+
+def bulk_key(t):
+    return (t["apt"], t["dong"], t["date"])
+
+
+def bulk_keys(ts):
+    """한 단지에서 같은 날 BULK_MIN 건 이상 신고된 묶음(일괄 거래)의 키."""
+    return {k for k, n in Counter(bulk_key(t) for t in ts).items() if n >= BULK_MIN}
+
+
+def bulk_block(cur, prv, keys):
+    items = []
+    for ts in (cur, prv):
+        groups = defaultdict(list)
+        for t in ts:
+            if bulk_key(t) in keys:
+                groups[bulk_key(t)].append(t)
+        for (apt, dong, date), v in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+            lo, hi = min(round(t["area_m2"]) for t in v), max(round(t["area_m2"]) for t in v)
+            ma = median_int([t["amount_manwon"] for t in v])
+            items.append({
+                "ym": v[0]["ym"], "apt": apt, "dong": dong, "date": date,
+                "count": len(v), "count_fmt": f"{len(v):,}건",
+                "area_fmt": f"{lo}㎡" if lo == hi else f"{lo}~{hi}㎡",
+                "median_amount": ma, "median_amount_fmt": won(ma),
+            })
+    nc = sum(i["count"] for i in items if i["ym"] == (cur[0]["ym"] if cur else None))
+    npv = sum(i["count"] for i in items if i["ym"] == (prv[0]["ym"] if prv else None))
+    return {"count": nc, "count_fmt": f"{nc:,}건", "prev_count": npv, "prev_count_fmt": f"{npv:,}건",
+            "items": items}
+
+
 def band_of(area):
     return next(name for name, _, _, hi in BANDS if area <= hi)
 
@@ -113,17 +154,18 @@ def area_stats(ts_all, ym, pm, yms, provisional, with_lists=True):
     cur = [t for t in ts_all if t["ym"] == ym]
     prv = [t for t in ts_all if t["ym"] == pm]
     mb, pb = month_block(cur, ym), month_block(prv, pm)
+    keys = bulk_keys(ts_all)
+    xb = month_block([t for t in cur if bulk_key(t) not in keys], ym)
+    xp = month_block([t for t in prv if bulk_key(t) not in keys], pm)
     out = {
         "month": mb,
         "prev": pb,
-        "change": {
-            "count_pct": pct(mb["count"], pb["count"]),
-            "count_pct_fmt": fpct(pct(mb["count"], pb["count"])),
-            "median_ppy_pct": pct(mb["median_ppy"], pb["median_ppy"]),
-            "median_ppy_pct_fmt": fpct(pct(mb["median_ppy"], pb["median_ppy"])),
-        },
+        "change": change_block(mb, pb),
+        "bulk": bulk_block(cur, prv, keys),
+        "ex_bulk": {"month": xb, "prev": xp, "change": change_block(xb, xp)},
         "series": [
-            dict(month_block([t for t in ts_all if t["ym"] == y], y), provisional=y in provisional)
+            dict(month_block(m := [t for t in ts_all if t["ym"] == y], y), provisional=y in provisional,
+                 bulk=sum(bulk_key(t) in keys for t in m))
             for y in yms
         ],
         "bands": [],
@@ -195,6 +237,7 @@ def compute(month=None, trades=None):
                 "실거래 신고 기한은 계약 후 30일이라 데이터 마지막 달은 건수가 덜 잡힌 잠정치다.",
                 f"신고가는 데이터 기간({yms[0]}~) 안에서 같은 단지, 같은 전용면적(㎡ 정수)의 직전 최고가를 넘긴 거래다.",
                 "평당가와 거래금액은 중위값이다. 해제(취소) 신고된 거래가 섞여 있을 수 있다.",
+                f"한 단지에서 같은 날 {BULK_MIN}건 이상 신고된 거래는 일괄 거래(bulk)로 따로 보고, 이를 뺀 거래량과 중위값(ex_bulk)을 함께 계산했다.",
             ],
         },
         "overall": area_stats(ts, ym, pm, yms, provisional, with_lists=False),

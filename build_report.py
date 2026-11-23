@@ -107,8 +107,18 @@ def kpi_card(title, s, color=None):
         <div><div class="n">{e(m['count_fmt'])}</div><div class="l">거래량 <b class="{delta_cls(ch['count_pct'])}">{e(ch['count_pct_fmt'])}</b></div></div>
         <div><div class="n">{e(m['median_ppy_fmt'])}</div><div class="l">중위 평당가 <b class="{delta_cls(ch['median_ppy_pct'])}">{e(ch['median_ppy_pct_fmt'])}</b></div></div>
       </div>
-      <div class="l">신고가 {e(rh['count_fmt'])} (비교 가능 {e(rh['comparable_fmt'])} 중 {e(rh['share_pct_fmt'])})</div>
+      <div class="l">신고가 {e(rh['count_fmt'])} (비교 가능 {e(rh['comparable_fmt'])} 중 {e(rh['share_pct_fmt'])})</div>{bulk_line(s)}
     </div>"""
+
+
+def bulk_line(s):
+    b, x = s["bulk"], s["ex_bulk"]
+    if not (b["count"] or b["prev_count"]):
+        return ""
+    return (f'<div class="l bulk">일괄 거래 {e(b["count_fmt"])} 제외 시 {e(x["month"]["count_fmt"])} '
+            f'<b class="{delta_cls(x["change"]["count_pct"])}">{e(x["change"]["count_pct_fmt"])}</b>, '
+            f'중위 평당가 {e(x["month"]["median_ppy_fmt"])} '
+            f'<b class="{delta_cls(x["change"]["median_ppy_pct"])}">{e(x["change"]["median_ppy_pct_fmt"])}</b></div>')
 
 
 def table(head, rows, num_cols=()):
@@ -140,6 +150,13 @@ def gu_section(gu, s, block, color, pm):
                  [[t["apt"], t["dong"], f"{t['area_m2']}㎡", t["floor"], t["amount_fmt"], t["ppy_fmt"], t["date"]]
                   for t in s["top_trades"]], num_cols=(2, 3, 4, 5))
     rh = s["record_highs"]
+    bulk = ""
+    if s["bulk"]["items"]:
+        bulk = ('<h3>일괄 거래 <span class="h3s">한 단지에서 같은 날 '
+                f'{rs.BULK_MIN}건 이상 신고</span></h3>'
+                + table(["단지", "동", "계약일", "건수", "전용", "중위 거래금액"],
+                        [[i["apt"], i["dong"], i["date"], i["count_fmt"], i["area_fmt"], i["median_amount_fmt"]]
+                         for i in s["bulk"]["items"]], num_cols=(3, 4, 5)))
     recs = table(["단지", "동", "전용", "거래금액", "직전 최고가", "상승률", "계약일"],
                  [[r["apt"], r["dong"], f"{r['area_m2']}㎡", r["amount_fmt"],
                    f"{r['prev_max_fmt']} ({r['prev_date']})", r["diff_pct_fmt"], r["date"]] for r in rh["items"]],
@@ -152,7 +169,7 @@ def gu_section(gu, s, block, color, pm):
   <section class="gu" id="{e(gu)}">
     <h2><span class="sw" style="background:{color}"></span>{e(gu)}</h2>
     <div class="prose">{paragraphs(block)}{rv}</div>
-    <h3>면적대별</h3>{bands}
+    {bulk}<h3>면적대별</h3>{bands}
     <div class="grid2">
       <div><h3>거래 많은 동</h3>{dongs}</div>
       <div><h3>거래 많은 단지</h3>{apts}</div>
@@ -171,6 +188,7 @@ def render(stats, c):
     series = {
         "gus": gus, "colors": [color[g] for g in gus], "yms": yms, "reportYm": ym,
         "provisional": [x["provisional"] for x in o["series"]],
+        "bulk": {g: [x["bulk"] for x in stats["gus"][g]["series"]] for g in gus},
         "count": {g: [x["count"] for x in stats["gus"][g]["series"]] for g in gus},
         "countFmt": {g: [x["count_fmt"] for x in stats["gus"][g]["series"]] for g in gus},
         "ppy": {g: [x["median_ppy"] for x in stats["gus"][g]["series"]] for g in gus},
@@ -223,6 +241,7 @@ def render(stats, c):
   .kpi-row{{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:8px}}
   .n{{font-size:19px;font-weight:800;letter-spacing:-.02em;line-height:1.1;white-space:nowrap}}
   .l{{font-size:11.5px;color:var(--ink-soft);margin-top:3px}}
+  .l.bulk{{border-top:1px dashed var(--line);padding-top:6px;margin-top:6px}}
   .l b{{font-weight:700;color:var(--ink)}} .l b.up{{color:var(--up)}} .l b.down{{color:var(--down)}}
   .sw{{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none}}
   .charts{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}}
@@ -372,7 +391,7 @@ function lineChart(box, key, fmtKey, tickFmt, zero) {{
     const i = Math.max(0, Math.min(n - 1, Math.round((px - m.l) / (pw / (n - 1)))));
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", .35);
     tip.innerHTML = `<b>${{S.yms[i].slice(0, 4)}}년 ${{mLabel(S.yms[i])}}${{S.provisional[i] ? " (잠정)" : ""}}</b>`
-      + S.gus.map((g, gi) => `<div class="row"><i class="sw" style="background:${{S.colors[gi]}}"></i>${{g}} ${{S[fmtKey][g][i]}}</div>`).join("");
+      + S.gus.map((g, gi) => `<div class="row"><i class="sw" style="background:${{S.colors[gi]}}"></i>${{g}} ${{S[fmtKey][g][i]}}${{S.bulk[g][i] ? ` <span style="opacity:.7">(일괄 ${{S.bulk[g][i]}}건 포함)</span>` : ""}}</div>`).join("");
     tip.style.opacity = 1;
     const tw = tip.offsetWidth, left = x(i) + 12 + tw > W ? x(i) - 12 - tw : x(i) + 12;
     tip.style.left = Math.max(0, left) + "px"; tip.style.top = m.t + "px";

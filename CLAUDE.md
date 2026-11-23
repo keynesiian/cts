@@ -37,6 +37,7 @@ python build_map.py      # out/leaflet_map.html
 REPORT_OUT=docs/report.html python build_report.py --strict   # 해설은 두고 표와 차트만 다시 그릴 때
 ```
 - 해설 규칙: 숫자는 stats의 `*_fmt` 문자열 그대로, 데이터에 없는 원인 추측 금지, 잠정 달은 비교 근거로 쓰지 않음
+- 일괄 거래: 한 단지에서 같은 날 10건 이상 신고된 거래(`BULK_MIN`)는 `bulk`로 분리하고 제외 수치 `ex_bulk`를 함께 계산. 청년주택 같은 소형 일괄 거래 하나가 구 합계와 중위값을 뒤집을 수 있음(2026년 9월 송파해링턴타워 170건)
 
 ## 실행 (Claude Code 웹/클라우드 세션)
 클라우드 샌드박스는 연결된 GitHub repo로 돌며 `secrets.env`/`out/`은 gitignore라 부재한다. 다음 전제로 동작한다.
