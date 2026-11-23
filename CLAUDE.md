@@ -9,6 +9,9 @@
 - `lawd_codes.py` : 시군구코드(LAWD_CD 5자리) → "시도 시군구" 매핑. 없는 지역은 dict에 추가
 - `build_map.py` : 지도 생성 진입점(Leaflet 전용)
 - `build_leaflet_map.py` / `leaflet_map.html` : 템플릿 DATA/GUS/YMS 치환 → 산출 HTML
+- `report_stats.py` : `data/trades.json` → 월간 리포트용 구별 통계 `out/report/stats.json`. 숫자는 전부 여기서 계산(기본 달은 데이터 마지막 달의 전달, 마지막 달은 신고 중인 잠정치)
+- `build_report.py` : 통계 + 해설(`data/report/YYYY-MM.json`) → 리포트 HTML. `--strict`는 해설에 통계에 없는 금액, 비율, 건수나 금지 문장부호가 있으면 실패
+- `.claude/workflows/monthly-report.js` : 월간 리포트 워크플로(`/monthly-report`). 통계 계산 1 + 구별 초안 3 + 구별 반박 검증 3 + 발행 1, 에이전트 8개
 - `secrets.env` : API 키. **절대 커밋 금지**(.gitignore 등록)
 
 ## 데이터 규칙
@@ -27,6 +30,13 @@
 python collect.py        # out/trades.{json,csv,geojson}
 python build_map.py      # out/leaflet_map.html
 ```
+
+## 월간 리포트
+```
+/monthly-report                                   # Claude Code에서. 결과 data/report/YYYY-MM.json, docs/report.html
+REPORT_OUT=docs/report.html python build_report.py --strict   # 해설은 두고 표와 차트만 다시 그릴 때
+```
+- 해설 규칙: 숫자는 stats의 `*_fmt` 문자열 그대로, 데이터에 없는 원인 추측 금지, 잠정 달은 비교 근거로 쓰지 않음
 
 ## 실행 (Claude Code 웹/클라우드 세션)
 클라우드 샌드박스는 연결된 GitHub repo로 돌며 `secrets.env`/`out/`은 gitignore라 부재한다. 다음 전제로 동작한다.
