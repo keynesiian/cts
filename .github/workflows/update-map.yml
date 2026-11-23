@@ -40,6 +40,7 @@ jobs:
           APT_TRADE_ENDPOINT: ${{ secrets.APT_TRADE_ENDPOINT }}
           APT_TRADE_API_KEY: ${{ secrets.APT_TRADE_API_KEY }}
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_JS_API_KEY: ${{ secrets.KAKAO_JS_API_KEY }}
           MAP_OUT: docs/index.html
           # MONTHS 는 위 단계에서 주입됨. TARGETS 는 collect.py 기본값(강남·서초·송파) 사용.
         run: |
